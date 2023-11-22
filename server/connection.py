@@ -23,3 +23,7 @@ def handle_request(client_socket, message):
     decoded_message = message.decode()
     print(decoded_message)
     client_socket.sendall(b'received your message. bye!')
+
+
+if __name__ == '__main__':
+    start_server('10.0.0.164', 5000)

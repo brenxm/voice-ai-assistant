@@ -1,4 +1,4 @@
-from thread_manager import on_thread
+from utils.thread_manager import on_thread
 import socket
 
 @on_thread

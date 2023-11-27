@@ -2,10 +2,10 @@ from network import ConnectionBlock
 from pynput import keyboard
 from time import sleep
 from queue import Queue
+import threading
 import pyaudio
 import time
 import json
-import io
 # Recording voice prompt
 # Press 'f20'
 # Establish connection with server
@@ -20,90 +20,99 @@ class Microphone():
     def __init__(self):
         self.recording = False
         self.connection_block = False
+        self.streamed_audio_buffer = []
+        self.disabled_key = False
     
     def listen_key(self, key):
-        # Initialize key
-        init_key_event(key, self.recording)
+        # Initialize key event
+        self._init_key_event(key, self.recording)
 
-        # Blocking, waiting for recording action event
-        while not self.recording:
-            sleep(0.1)
+    def disable_key(self):
+        self.disabled_key = True
 
-        # Create a connection to the server
-        self.connection_block = ConnectionBlock()
+    def _init_key_event(self, key):
+        def on_press(key_event):
+            if key_event == key and not self.disabled_key:
+                self.disabled_key = True
+                self.recording = True
+
+                # Establish connection
+                self.connection_block = ConnectionBlock()
+
+                # Start streaming audio on separate thread
+                stream_thread = threading.Thread(target=(self._stream_audio))
+                stream_thread.start()
+
+
+        def on_release(key_event):
+            if key_event == key:
+                self.recording = False
+                self.disabled_key = False
+
+        listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        listener.start()
+
         
-        payload_queue = Queue()
+    def _stream_audio(self):
+        pya = pyaudio.PyAudio()
+        streamer = pya.open(format=pyaudio.paInt16, channels=1, rate=44100, inpt=True,  frames_per_buffer=1024)
 
-        # Start streaming
-        # TODO: implement function to stream data
+        timeout = 1.5 # Timeout of when to slice the buffer of audio
+        silence_threshold = 300
+
+        audio_buffer = []
+
+        silence_start_time = None
+        cutoff_index = None
 
         while self.recording:
-            # Blocking
-            payload = payload_queue.get()
+            chunk = streamer.read(1024)
+            audio_buffer.append(chunk)
 
-            payload_size = len(payload)
+            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True) for i in range(90, len(chunk), 2)]
 
-            payload_obj = {
-                'metadata': json.dumps({'payload_size': payload_size}),
-                'payload': payload
-            }
-
-            self.connection_block.send_payload(payload_obj)
-        
-
-        print('End of recording')
-
+            if max(values) < silence_threshold:
+                if silence_start_time is None:
+                    silence_start_time = time.time()
+                                
+                elif time.time() - silence_start_time > timeout:
+                    send_payload_thread = threading.Thread(target=(self._send_payload), args=(audio_buffer))
+                    send_payload_thread.start()
+                    audio_buffer.clear()
 
 
-        # metadata, payload to obj
-        # obj to send_to_server method
+    def _send_payload(self, audio_chunks):
+        silence_threshold = 300
 
+        # Remove silenced part of the beginning of audio_chunks
+        for index, chunk in enumerate(audio_chunks):
+            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True) for i in range(90, len(chunk), 2)]
 
-def init_key_event(key, recording):
-    def on_press(key_event):
-        nonlocal recording
-        if key_event == key:
-            recording = True
+            if max(values) > silence_threshold:
+                audio_chunks = audio_chunks[index:]
+                break
 
-    def on_release(key_event):
-        nonlocal recording
-        if key_event == key:
-            recording = False
+        # Remove silenced part of the end of audio_chunks
+        audio_chunks.reverse()
+        for index, chunk in enumerate(audio_chunks):
+            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True) for i in range(90, len(chunk), 2)]
 
-    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-    listener.start()
-    
+            if max(values) > silence_threshold:
+                audio_chunks = audio_chunks[index:]
+                break
 
-def stream_audio():
-    pya = pyaudio.PyAudio()
-    streamer = pya.open(format=pyaudio.paInt16, channels=1, rate=44100, inpt=True, frames_per_buffer=1024)
-    audio_buffer = []
-    sound_detected = True
-    silence_start_time = None
-    detected = False
-    detected_index = [0]
-    silent_called = False
+        audio_chunks.reverse()
 
+        audio_chunks_size = len(audio_chunks)
 
-    def stream():
-        chunk = streamer.read(1024)
-        audio_buffer.append(chunk)
+        payload = {
+            'metadata': {
+                'size': audio_chunks_size
+            },
+            'payload': audio_chunks
+        }
 
-        values = [int.from_bytes(chunk[i:i+2], 'little', signed=True) for i in range(0, len(chunk), 2)]
-
-        if max(values) > 700:
-            sound_detected = True
-
-        if max(values) < 300:
-            if silence_start_time is None:
-                silence_start_time = time.time()
-            
-        elif time.time() - silence_start_time > 1.5 and not detected and sound_detected:
-            detected = True
-            silent_called = True
-            index = len(audio_buffer)
-            detected_index.append(index)
-
+        self.connection_block.send_payload(payload)
 
 
 # Test

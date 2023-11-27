@@ -8,7 +8,7 @@ import time
 import json
 
 # Test module
-from transcript import transcript
+from transcript_test import transcript
 
 
 class Microphone():
@@ -63,9 +63,6 @@ class Microphone():
         silence_start_time = None
         sound_detected = False
 
-        start_index = 0
-        end_index = None
-
         while self.recording:
             chunk = streamer.read(1024)
             audio_buffer.append(chunk)
@@ -83,66 +80,67 @@ class Microphone():
 
                 elif time.time() - silence_start_time > timeout:  # Timed out
                     if sound_detected:
-                        end_index = len(audio_buffer)
+                        # Temp variable for audio buffer, since it's being cleared
+                        temp_buffer = list(audio_buffer)
                         send_payload_thread = threading.Thread(
-                            target=self._send_payload, args=(audio_buffer, start_index, end_index, ))
+                            target=self._send_payload, args=(temp_buffer,))
                         send_payload_thread.start()
-                        start_index = end_index
+                        audio_buffer.clear()
                         sound_detected = False
                         silence_start_time = None
 
         if len(audio_buffer) > 0:
             send_payload_thread = threading.Thread(
-                target=self._send_payload, args=(audio_buffer, start_index, len(audio_buffer)))
+                target=self._send_payload, args=(audio_buffer,))
             send_payload_thread.start()
 
-    def _send_payload(self, audio_chunks, start_index, end_index):
-        if len(audio_chunks) <= 0:
+    def _send_payload(self, audio_chunks):
+
+        audio_chunks = self._clean_audio_chunks(audio_chunks)
+
+        if not audio_chunks:
             return
-
-        audio_chunks = audio_chunks[start_index:end_index]
-
-        silence_threshold = 300
-
-        # Remove silenced part of the beginning of audio_chunks
-        for index, chunk in enumerate(audio_chunks):
-            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True)
-                      for i in range(90, len(chunk), 2)]
-
-            if max(values) > silence_threshold:
-                audio_chunks = audio_chunks[index:]
-                break
-
-        # Remove silenced part of the end of audio_chunks
-        audio_chunks.reverse()
-
-        for index, chunk in enumerate(audio_chunks):
-            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True)
-                      for i in range(90, len(chunk), 2)]
-
-            if max(values) > silence_threshold:
-                audio_chunks = audio_chunks[index:]
-                break
-
-        audio_chunks.reverse()
-
-        audio_chunks_size = len(audio_chunks)
-
-        if audio_chunks_size < 5:
-            return
-
+        print(
+            f'received audio_chunks for transcriptions with the size of {len(audio_chunks)}')
         transcript(audio_chunks)
 
         payload = {
             'metadata': {
-                'size': audio_chunks_size
+                'size': len(audio_chunks)
             },
             'payload': audio_chunks
         }
 
         # self.connection_block.send_payload(json.dumps(payload))
 
-        print('succesfully sent a payload')
+    def _clean_audio_chunks(self, audio_chunks):
+        # Accept list/array of audio chunks as argument,
+        # Removes leading silenced chunks and trailing silenced chunks
+        # If all chunk is silenced, it will return false
+        silence_threshold = 300
+
+        # remove leading silences in audio_chunks
+        for index, chunk in enumerate(audio_chunks):
+            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True)
+                      for i in range(90, len(chunk), 2)]
+
+            if max(values) > silence_threshold:
+                audio_chunks = audio_chunks[index:]
+                break
+
+            if index == len(audio_chunks) - 1:
+                return False
+
+        # remove trailing silences in audio_chunks
+        for index, chunk in reversed(list(enumerate(audio_chunks))):
+            values = [int.from_bytes(chunk[i:i+2], 'little', signed=True)
+                      for i in range(90, len(chunk), 2)]
+
+            if max(values) > silence_threshold:
+                audio_chunks = audio_chunks[:index + 1]
+                break
+
+        return audio_chunks
 
 
 # Test

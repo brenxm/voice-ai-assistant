@@ -1,5 +1,6 @@
+from datetime import datetime, timedelta
 import sqlite3
-import uuid
+import jwt
 import bcrypt
 
 
@@ -14,7 +15,7 @@ class Authentication:
             user_id INT PRIMARY KEY, 
             username TEXT, 
             password_hash TEXT, salt TEXT)''')
-        
+
         # Ensure to initialize table for tokens
         self.db_cursor.execute(
             '''CREATE TABLE IF NOT EXISTS tokens (
@@ -44,38 +45,80 @@ class Authentication:
 
         self.db_conn.commit()
 
-    # Login
-    # 1. Check if in the system
-    # 2. Provide fresh token
     def login(self, username, password):
+        user_id = self.verify_user(username, password)
+
+        if not user_id:
+            print(f'Cannot identify username/password')
+            return
+
+        self.grant_token(user_id)
+        print('Succesfully logged in.')
+
+    def verify_user(self, username, password):
+        '''
+        username: str -
+        password: str - (raw str)
+        return False (bool) / user_id (str)
+        '''
+
         user_data = self.db_cursor.execute(
-            'SELECT password_hash, salt FROM users WHRE username = ?', (username,)).fetchone()
-
+            'SELECT password_hash, user_id FROM users WHERE username = ?', (username,)).fetchone()
         if user_data:
-            stored_hash = user_data[0]
-            # Verify the password
-            if bcrypt.checkpw(password.encode(), stored_hash):
-                # Password is correct; geneerate and return a token
-                token = str(uuid.uuid4())
-                print(f'Login succesful. Tken: {token}')
-                return token
+            stored_pw = user_data[0]
+            user_id = user_data[1]
 
-            else:
-                # Password is incorrect
-                print('Invalid password.')
-                return None
+            if bcrypt.chekpw(password.encode(), stored_pw):
+                print('Password match.')
+                return user_id
 
-        else:
-            # User does not exist
-            print('User not found.')
-            return None
+        return False
 
     def grant_token(self, user_id):
-        pass
-        
+        expiry = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + timedelta(days=5)
+        self.db_cursor.execute(
+            'UPDATE tokens SET expiry = ? WHERE user_id = ?', (expiry, user_id)
+        )
+        self.db_conn.commit()
 
-    def verify_token(self):
-        pass
+    def verify_token(self, user_id):
+        try:
+            data = self.db_cursor.execute(
+                'SELECT expiry FROM tokens WHERE user_id = ?', (user_id,)
+            ).fetchone()
+
+            if data and data[0]:
+                datetime_obj = datetime.strptime(data[0], '%Y-%m-%d %H:%M:%S')
+                return datetime_obj < datetime.now()
+
+            else:
+                return False
+        except Exception as e:
+            print(
+                f'Error during attempt to verify token of user_id: {user_id}: {e}')
+            return False
+
+    def delete_user(self, user_id):
+        try:
+            self.db_cursor.execute(
+                'DELETE FROM users where id =?', (user_id,)
+            )
+            self.db_conn.commit()
+
+        except Exception as e:
+            print(f'Error during attempt to delete user_id: {user_id}: {e}')
+            return False
+
+    def revoke_token(self, user_id):
+        try:
+            self.db_cursor.execute(
+                'UPDATE tokens SET expiry = ? WHERE user_id = ?', (
+                    None, user_id)
+            )
+
+            self.db_conn.commit()
+        except Exception as e:
+            print(f'Error: {e}')
 
     def show_users(self):
         res = self.db_conn.execute('SELECT * FROM users')

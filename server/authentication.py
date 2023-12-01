@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 import sqlite3
-import jwt
 import bcrypt
+import jwt
+import os
 
 
 class Authentication:
@@ -12,20 +14,21 @@ class Authentication:
         # Ensure to initialize table for users
         self.db_cursor.execute(
             '''CREATE TABLE IF NOT EXISTS users (
-            user_id INT PRIMARY KEY, 
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT, 
             username TEXT, 
             password_hash TEXT, salt TEXT)''')
 
         # Ensure to initialize table for tokens
         self.db_cursor.execute(
             '''CREATE TABLE IF NOT EXISTS tokens (
-            token_id INT PRIMARY KEY,
+            token_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INT,
             token TEXT,
-            expiry TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id)
             )'''
         )
+
+        load_dotenv()
 
     def register_user(self, username, password):
         salt = bcrypt.gensalt()
@@ -43,6 +46,14 @@ class Authentication:
         self.db_cursor.execute(
             '''INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)''', (username, password_hash, salt))
 
+        user_id = self.db_cursor.lastrowid
+
+        token = self.gen_token(user_id)
+
+        self.db_cursor.execute(
+            '''INSERT INTO token (user_id, token) VALUES (?, ?)''', (user_id, token)
+        )
+
         self.db_conn.commit()
 
     def login(self, username, password):
@@ -52,8 +63,7 @@ class Authentication:
             print(f'Cannot identify username/password')
             return
 
-        self.grant_token(user_id)
-        print('Succesfully logged in.')
+        self.reissue_token(user_id)
 
     def verify_user(self, username, password):
         '''
@@ -68,28 +78,75 @@ class Authentication:
             stored_pw = user_data[0]
             user_id = user_data[1]
 
-            if bcrypt.chekpw(password.encode(), stored_pw):
+            if bcrypt.checkpw(password.encode(), stored_pw):
                 print('Password match.')
                 return user_id
 
+        print('Password didn\'t match')
         return False
 
-    def grant_token(self, user_id):
-        expiry = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + timedelta(days=5)
-        self.db_cursor.execute(
-            'UPDATE tokens SET expiry = ? WHERE user_id = ?', (expiry, user_id)
-        )
-        self.db_conn.commit()
+    def gen_token(self, user_id):
+        hex_key = os.getenv('JWT_SECRET_HEX_KEY')
+
+        print(hex_key)
+        secret_key = bytes.fromhex(hex_key)
+
+        expiry = datetime.now() + timedelta(days=5)
+        expiry_timestamp = int(expiry.timestamp())
+
+        payload = {
+            'user_id': user_id,
+            'exp': expiry_timestamp
+        }
+
+        token = jwt.encode(payload, secret_key, algorithm='HS256')
+
+        return token
+
+    def reissue_token(self, user_id):
+        hex_key = os.getenv("JWT_SECRET_HEX_KEY")
+
+        if hex_key:
+            secret_key = bytes.fromhex(hex_key)
+
+            # Correct expiry handling
+            expiry = datetime.now() + timedelta(days=5)
+            expiry_timestamp = int(expiry.timestamp())
+
+            payload = {
+                'user_id': user_id,
+                'exp': expiry_timestamp  # Using standard JWT expiry field
+            }
+
+            token = jwt.encode(payload, secret_key, algorithm='HS256')
+
+            try:
+                self.db_cursor.execute(
+                    'UPDATE tokens SET token = ? WHERE user_id = ?', (
+                        token, user_id)
+                )
+                print('succesfully issuded a token')
+                self.db_conn.commit()
+
+            except Exception as e:
+                # Handle or log the exception
+                print(f"Database error: {e}")
+                self.db_conn.rollback()
+
+        else:
+            raise EnvironmentError(
+                'JWT secret key not found in environment variables')
 
     def verify_token(self, user_id):
         try:
             data = self.db_cursor.execute(
-                'SELECT expiry FROM tokens WHERE user_id = ?', (user_id,)
+                'SELECT token FROM tokens WHERE user_id = ?', (user_id,)
             ).fetchone()
 
+            print(data)
             if data and data[0]:
                 datetime_obj = datetime.strptime(data[0], '%Y-%m-%d %H:%M:%S')
-                return datetime_obj < datetime.now()
+                return datetime_obj > datetime.now()
 
             else:
                 return False
@@ -126,4 +183,6 @@ class Authentication:
 
 
 auth = Authentication()
-auth.register_user('colleenross', 'heheh')
+auth.register_user('colleenross', 'hehe')
+# print(auth.verify_token(1))
+auth.show_users()

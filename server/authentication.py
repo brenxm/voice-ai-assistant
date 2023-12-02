@@ -8,8 +8,9 @@ import os
 
 class Authentication:
     def __init__(self):
-        self.db_conn = sqlite3.connect('database.db')
+        self.db_conn = sqlite3.connect('credentials.db')
         self.db_cursor = self.db_conn.cursor()
+        self.secret_key = self.load_jwt_secret_key()
 
         # Ensure to initialize table for users
         self.db_cursor.execute(
@@ -28,8 +29,6 @@ class Authentication:
             )'''
         )
 
-        load_dotenv()
-
     def register_user(self, username, password):
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password.encode(), salt)
@@ -43,18 +42,23 @@ class Authentication:
             print(f'Username {username} already existing!')
             return False
 
+        # Add user to the users table in credentials database
         self.db_cursor.execute(
             '''INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)''', (username, password_hash, salt))
 
         user_id = self.db_cursor.lastrowid
 
+        # Generate fresh token
         token = self.gen_token(user_id)
 
+        # Create a token in the tokens table in credentials database
         self.db_cursor.execute(
-            '''INSERT INTO token (user_id, token) VALUES (?, ?)''', (user_id, token)
+            '''INSERT INTO tokens (user_id, token) VALUES (?, ?)''', (user_id, token)
         )
 
+        # Commit all action to database
         self.db_conn.commit()
+        print('Succesfully registered in users and tokens')
 
     def login(self, username, password):
         user_id = self.verify_user(username, password)
@@ -104,38 +108,30 @@ class Authentication:
         return token
 
     def reissue_token(self, user_id):
-        hex_key = os.getenv("JWT_SECRET_HEX_KEY")
 
-        if hex_key:
-            secret_key = bytes.fromhex(hex_key)
+        # Correct expiry handling
+        expiry = datetime.now() + timedelta(days=5)
+        expiry_timestamp = int(expiry.timestamp())
 
-            # Correct expiry handling
-            expiry = datetime.now() + timedelta(days=5)
-            expiry_timestamp = int(expiry.timestamp())
+        payload = {
+            'user_id': user_id,
+            'exp': expiry_timestamp  # Using standard JWT expiry field
+        }
 
-            payload = {
-                'user_id': user_id,
-                'exp': expiry_timestamp  # Using standard JWT expiry field
-            }
+        token = jwt.encode(payload, self.secret_key, algorithm='HS256')
 
-            token = jwt.encode(payload, secret_key, algorithm='HS256')
+        try:
+            self.db_cursor.execute(
+                'UPDATE tokens SET token = ? WHERE user_id = ?', (
+                    token, user_id)
+            )
+            print('succesfully issuded a token')
+            self.db_conn.commit()
 
-            try:
-                self.db_cursor.execute(
-                    'UPDATE tokens SET token = ? WHERE user_id = ?', (
-                        token, user_id)
-                )
-                print('succesfully issuded a token')
-                self.db_conn.commit()
-
-            except Exception as e:
-                # Handle or log the exception
-                print(f"Database error: {e}")
-                self.db_conn.rollback()
-
-        else:
-            raise EnvironmentError(
-                'JWT secret key not found in environment variables')
+        except Exception as e:
+            # Handle or log the exception
+            print(f"Database error: {e}")
+            self.db_conn.rollback()
 
     def verify_token(self, user_id):
         try:
@@ -144,11 +140,29 @@ class Authentication:
             ).fetchone()
 
             print(data)
-            if data and data[0]:
-                datetime_obj = datetime.strptime(data[0], '%Y-%m-%d %H:%M:%S')
-                return datetime_obj > datetime.now()
+            # If no token for user
+            if not data:
+                print('No token registed for this user')
+                return
+
+            if data[0]:
+                payload = jwt.decode(
+                    data[0], self.secret_key, algorithms=['HS256'])
+                stored_exp = payload['exp']
+                time_now = datetime.now().timestamp()
+
+                print(
+                    f'the timestamp now is {time_now} and the token expiration date is {stored_exp}')
+                # Check if stored token is expired
+                if stored_exp > time_now:
+                    print('Token is good')
+                    return True
+                else:
+                    print('Token is expired')
+                    return False
 
             else:
+                print(f'This token has been revoked')
                 return False
         except Exception as e:
             print(
@@ -158,9 +172,23 @@ class Authentication:
     def delete_user(self, user_id):
         try:
             self.db_cursor.execute(
-                'DELETE FROM users where id =?', (user_id,)
+                'SELECT * FROM users WHERE user_id = ?', (user_id,)
             )
-            self.db_conn.commit()
+
+            if self.db_cursor.fetchone():
+                self.db_cursor.execute(
+                    'DELETE FROM users WHERE user_id =?', (user_id,)
+                )
+
+                self.db_cursor.execute(
+                    'DELETE FROM tokens WHERE user_id =?', (user_id,)
+                )
+
+                self.db_conn.commit()
+                print(f'succesfully deleted user: {user_id}')
+
+            else:
+                print('User is not existing')
 
         except Exception as e:
             print(f'Error during attempt to delete user_id: {user_id}: {e}')
@@ -169,7 +197,7 @@ class Authentication:
     def revoke_token(self, user_id):
         try:
             self.db_cursor.execute(
-                'UPDATE tokens SET expiry = ? WHERE user_id = ?', (
+                'UPDATE tokens SET token = ? WHERE user_id = ?', (
                     None, user_id)
             )
 
@@ -181,8 +209,21 @@ class Authentication:
         res = self.db_conn.execute('SELECT * FROM users')
         print(res.fetchall())
 
+    def show_tokens(self):
+        res = self.db_conn.execute('SELECT * FROM tokens')
+        print(res.fetchall())
+
+    def load_jwt_secret_key(self):
+        load_dotenv()
+        hex_key = os.getenv('JWT_SECRET_HEX_KEY')
+        secret_key = bytes.fromhex(hex_key)
+        return secret_key
+
 
 auth = Authentication()
-auth.register_user('colleenross', 'hehe')
-# print(auth.verify_token(1))
-auth.show_users()
+# auth.register_user('colleenross', 'hehe')
+# auth.verify_user('colleenross', 'heheh')
+auth.verify_token(2)
+# auth.revoke_token(2)
+# auth.delete_user(1)
+# auth.show_tokens()

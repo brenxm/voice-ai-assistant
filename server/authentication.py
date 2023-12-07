@@ -30,6 +30,8 @@ class Authentication:
         )
 
     def register_user(self, username, password):
+        # TODO: Apply username and password input validations
+        
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password.encode(), salt)
 
@@ -220,10 +222,3 @@ class Authentication:
         return secret_key
 
 
-auth = Authentication()
-# auth.register_user('colleenross', 'hehe')
-# auth.verify_user('colleenross', 'heheh')
-auth.verify_token(2)
-# auth.revoke_token(2)
-# auth.delete_user(1)
-# auth.show_tokens()

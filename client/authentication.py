@@ -1,5 +1,6 @@
-from network import ConnectionBlock
+from network import ConnectionBlock, CreatePayloadData
 from dotenv import load_dotenv
+import json
 import os
 
 class Authentication():
@@ -12,16 +13,19 @@ class Authentication():
         
         conn = ConnectionBlock()
 
+        data = CreatePayloadData()
+
         payload = {
-            "method": "AUTH/login",
-            "token": self.token,
-            "payload": {
-                'username': username,
-                'password': password
-            }
+            "username": username,
+            "password": password
         }
 
-        conn.send_payload(payload)
+        # Follow sequence, must call create_payload first before invoking create_header. create_header is dependant on payload to identify it's payloads size for transmit
+        data.create_payload(payload) 
+        data.create_header('AUTH/register', self.token)
+
+        conn.send_payload(data)
+
 
 
     def load_token(self, token_file_name = 'token.env', root_folder = 'ai-assistant'):

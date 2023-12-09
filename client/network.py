@@ -15,15 +15,16 @@ class CreatePayloadData():
         method_fixed = method.ljust(METHOD_SIZE)[:METHOD_SIZE]
         token_fixed = token.ljust(TOKEN_SIZE)[:TOKEN_SIZE]
 
+        # Header format must match the parsing header method on server end
         header_format = f'>{METHOD_SIZE}s{TOKEN_SIZE}sI'
-
-        header = struct.pack(header_format, method_fixed.encode(),
-                             token_fixed.encode(), len(self.payload))
+        # The size parsed from payload is in bytes format
+        header = struct.pack(header_format, method_fixed.encode(),token_fixed.encode(), len(self.payload))
 
         self.header = header
 
     def create_payload(self, payload):
-        self.payload = payload.encode()
+        payload_str = json.dumps(payload)
+        self.payload = payload_str.encode()
 
 
 class ConnectionBlock():
@@ -33,9 +34,10 @@ class ConnectionBlock():
     def send_payload(self, data: CreatePayloadData):
         self.client.sendall(data.header)
         self.client.sendall(data.payload)
+        print('payload sent')
 
         # Blocking, wait for servers response
-        
+        response = self.response()
 
     def _connect_to_server(self, server_ip, server_port):
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,3 +50,18 @@ class ConnectionBlock():
         # TODO: Come up with strucutre on how server sends data back
         # etc: like payload size, type of data received etc
         pass
+
+
+# Test
+conn = ConnectionBlock()
+
+data = CreatePayloadData()
+
+payload = {
+    'username': "colleenross",
+    'password': 'ehehe'
+}
+data.create_payload(payload)
+data.create_header('AUTH/registration', '23434343344')
+
+conn.send_payload(data)

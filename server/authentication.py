@@ -76,13 +76,12 @@ class Authentication:
         password_hash = bcrypt.hashpw(password.encode(), salt)
 
         # Get existing usernames
-        res = self.db_conn.execute('SELECT username FROM users')
-        usernames = [tple[0] for tple in res.fetchall()]
+        res = self.db_conn.execute('SELECT COUNT(*) FROM users WHERE username = ?', (username,))
+        existing = res.fetchone()[0] > 0
 
-        # Verify if the username is already taken
-        if username in usernames:
+        if existing:
             print(f'Username {username} already existing!')
-            return False
+            return
 
         # Add user to the users table in credentials database
         self.db_cursor.execute(

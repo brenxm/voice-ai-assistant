@@ -18,7 +18,8 @@ class CreatePayloadData():
         # Header format must match the parsing header method on server end
         header_format = f'>{METHOD_SIZE}s{TOKEN_SIZE}sI'
         # The size parsed from payload is in bytes format
-        header = struct.pack(header_format, method_fixed.encode(),token_fixed.encode(), len(self.payload))
+        header = struct.pack(header_format, method_fixed.encode(
+        ), token_fixed.encode(), len(self.payload))
 
         self.header = header
 
@@ -37,7 +38,7 @@ class ConnectionBlock():
         print('payload sent')
 
         # Blocking, wait for servers response
-        response = self.response(self.client)
+        response = self.response()
 
     def _connect_to_server(self, server_ip, server_port):
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,7 +48,8 @@ class ConnectionBlock():
         return client
 
     def response(self):
-        response_header = self.client.recv(64) # Using constant of 64 bytes, must adhere to design
+        # Using constant of 64 bytes, must adhere to design
+        response_header = self.client.recv(64)
         print(response_header)
 
 
@@ -58,7 +60,7 @@ data = CreatePayloadData()
 
 payload = {
     'username': "colleenross",
-    'password': 'ehehe'
+    'password': 'ehehe34'
 }
 data.create_payload(payload)
 data.create_header('AUTH/login', '23434343344')

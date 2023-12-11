@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from utils.thread_manager import on_thread
 from dotenv import load_dotenv
-from connection import create_header, send_response
+from network import create_header, send_response
 import queue
 import sqlite3
 import bcrypt
@@ -63,7 +63,6 @@ class Authentication:
                 elif method_path == LOGIN:
                     self.login(data)
 
-                
     def register_user(self, data):
         # TODO: Apply username and password input validations
         username = data['payload']['username']
@@ -73,7 +72,8 @@ class Authentication:
         password_hash = bcrypt.hashpw(password.encode(), salt)
 
         # Get existing usernames
-        res = self.db_conn.execute('SELECT COUNT(*) FROM users WHERE username = ?', (username,))
+        res = self.db_conn.execute(
+            'SELECT COUNT(*) FROM users WHERE username = ?', (username,))
         existing = res.fetchone()[0] > 0
 
         if existing:
@@ -107,13 +107,15 @@ class Authentication:
             print(f'Cannot identify username/password')
             return
 
+        token = self.reissue_token(user_id).encode()
+
         response_data = {
-            "header": create_header(data["header"]["method"]),
-            "payload": self.reissue_token(user_id).encode()
+            "header": create_header(data["header"]["method"], token),
+            "payload": token
         }
 
         socket_client = data['client_socket']
-        
+
         send_response(socket_client, response_data)
 
         print(f'succesfully sent response data: {data}')

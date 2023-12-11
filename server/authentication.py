@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from utils.thread_manager import on_thread
 from dotenv import load_dotenv
-from connection import create_header
+from connection import create_header, send_response
 import queue
 import sqlite3
 import bcrypt
@@ -57,8 +57,6 @@ class Authentication:
             method_path = method.split('/')[1]
 
             if method_type == AUTH:
-               
-
                 if method_path == REGISTRATION:
                     self.register_user(data)
 
@@ -66,7 +64,6 @@ class Authentication:
                     self.login(data)
 
                 
-
     def register_user(self, data):
         # TODO: Apply username and password input validations
         username = data['payload']['username']
@@ -111,15 +108,14 @@ class Authentication:
             return
 
         response_data = {
-            "header": {
-                "method": f'{data["header"]["method"]}/{data["header"]["type"]}',
-            }
+            "header": create_header(data["header"]["method"]),
+            "payload": self.reissue_token(user_id).encode()
         }
 
-        payload = self.reissue_token(user_id).encode()
-
         socket_client = data['client_socket']
-        socket_client.sendall()
+        
+        send_response(socket_client, response_data)
+
         print(f'succesfully sent response data: {data}')
 
     def verify_user(self, username, password):

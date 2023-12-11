@@ -50,7 +50,7 @@ def start_server(ip_address, port, max_request=10):
 
 
 @on_thread
-def handle_request(client_socket, message):
+def handle_request(client_socket: socket, message):
     decoded_message = message.decode()
     print(decoded_message)
     client_socket.sendall(b'received your message. bye!')
@@ -60,10 +60,10 @@ def handle_request(client_socket, message):
 def authenticate_request(data):
     authentication.add(data)
 
-def send_response(client_socket, data):
-    # Schema for data
-    # header: obj
-    # payload: bytes
+def send_response(client_socket: socket, data: object):
+    # Data object schema for data to be sent
+        # header: packed struct format
+        # payload: bytes
 
     client_socket.sendall(data["header"])
     client_socket.sendall(data["payload"])
@@ -71,18 +71,24 @@ def send_response(client_socket, data):
     # Close client
     client_socket.close()
 
-def create_header(method, payload):
+    print('Successfully sent response from server to client')
+
+def create_header(method: str, payload: bytes):
+    # payload argument must be in bytes format
+
+    if not isinstance(payload, bytes):
+        raise ValueError(f'Argument payload must be in bytes format, instead {type(payload.__name__)} is given.')
+    
     METHOD_SIZE = 20
     PAYLOAD_BYTES_SIZE = 4 # Do not use in this method, for documentation purposes only
     TOTAL_HEADER_BYTES = 64 # Do not use in this method, for documentation purposes only
 
     header_format = f'>{METHOD_SIZE}sI'
-    # TODO, fixed payload, ensure payload argument is in byte form
 
+    # Pad and concat the method to ensure same size
     method_fixed = method.ljust(METHOD_SIZE)[:METHOD_SIZE]
-    payload_fixed = json.dumps(payload).encode()
 
-    packed_header = struct.pack(header_format, method_fixed.encode(), len(payload_fixed))
+    packed_header = struct.pack(header_format, method_fixed.encode(), len(payload))
 
     return packed_header
 

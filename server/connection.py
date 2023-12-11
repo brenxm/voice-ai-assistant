@@ -1,6 +1,6 @@
 from utils.thread_manager import on_thread
-from time import sleep
-import sys
+from authentication import authentication
+import json
 import struct
 import socket
 
@@ -33,7 +33,9 @@ def start_server(ip_address, port, max_request=10):
         method = method.decode().strip()
         token = token.decode().strip()
 
+        # Receives payload
         payload = client_socket.recv(payload_size)
+        payload = json.loads(payload)
 
         data = {
             'payload': payload,
@@ -41,10 +43,10 @@ def start_server(ip_address, port, max_request=10):
                 "method": method,
                 "token": token
             },
-            'client_socket': client_socket
+            'client_socket': client_socket,
         }
 
-        router(data)
+        authenticate_request(data)
 
 
 @on_thread
@@ -53,16 +55,36 @@ def handle_request(client_socket, message):
     print(decoded_message)
     client_socket.sendall(b'received your message. bye!')
 
+
 @on_thread
-def router(data):
+def authenticate_request(data):
+    authentication.add(data)
 
-    method = data['header']['method']
+def send_response(client_socket, data):
+    # Schema for data
+    # header: obj
+    # payload: bytes
 
-    method_type = method.split('/')[0]
-    method_path = method.split('/')[1]
+    client_socket.sendall(data["header"])
+    client_socket.sendall(data["payload"])
 
-    print(f"method type: {method_type}\nmethod_path: {method_path}")
-    
+    # Close client
+    client_socket.close()
+
+def create_header(method, payload):
+    METHOD_SIZE = 20
+    PAYLOAD_BYTES_SIZE = 4 # Do not use in this method, for documentation purposes only
+    TOTAL_HEADER_BYTES = 64 # Do not use in this method, for documentation purposes only
+
+    header_format = f'>{METHOD_SIZE}sI'
+    # TODO, fixed payload, ensure payload argument is in byte form
+
+    method_fixed = method.ljust(METHOD_SIZE)[:METHOD_SIZE]
+    payload_fixed = json.dumps(payload).encode()
+
+    packed_header = struct.pack(header_format, method_fixed.encode(), len(payload_fixed))
+
+    return packed_header
 
 if __name__ == '__main__':
-    start_server('10.0.0.164', 5000)
+    start_server('10.0.0.166', 5000)

@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta
+from utils.thread_manager import on_thread
 from dotenv import load_dotenv
+from connection import create_header
+import queue
 import sqlite3
 import bcrypt
 import jwt
@@ -7,10 +10,17 @@ import os
 
 
 class Authentication:
-    def __init__(self):
+    def __init__(self,):
+        self.secret_key = self.load_jwt_secret_key()
+        self.query_queue = queue.Queue()
+
+        # Start worker
+        self.db_worker()
+
+    @on_thread
+    def db_worker(self):
         self.db_conn = sqlite3.connect('credentials.db')
         self.db_cursor = self.db_conn.cursor()
-        self.secret_key = self.load_jwt_secret_key()
 
         # Ensure to initialize table for users
         self.db_cursor.execute(
@@ -29,9 +39,39 @@ class Authentication:
             )'''
         )
 
-    def register_user(self, username, password):
+        # Main methods
+        AUTH = "AUTH"
+        PROMPT = "PROMPT"
+
+        # submethods/path
+        REGISTRATION = 'registration'
+        LOGIN = 'login'
+        AUDIO = 'audio'
+        TEXT = 'text'
+
+        while True:
+            data = self.query_queue.get()
+
+            method = data['header']['method']
+            method_type = method.split('/')[0]
+            method_path = method.split('/')[1]
+
+            if method_type == AUTH:
+               
+
+                if method_path == REGISTRATION:
+                    self.register_user(data)
+
+                elif method_path == LOGIN:
+                    self.login(data)
+
+                
+
+    def register_user(self, data):
         # TODO: Apply username and password input validations
-        
+        username = data['payload']['username']
+        password = data['payload']['password']
+
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password.encode(), salt)
 
@@ -62,14 +102,26 @@ class Authentication:
         self.db_conn.commit()
         print('Succesfully registered in users and tokens')
 
-    def login(self, username, password):
+    def login(self, data):
+        username = data['payload']['username']
+        password = data['payload']['password']
         user_id = self.verify_user(username, password)
 
         if not user_id:
             print(f'Cannot identify username/password')
             return
 
-        self.reissue_token(user_id)
+        response_data = {
+            "header": {
+                "method": f'{data["header"]["method"]}/{data["header"]["type"]}',
+            }
+        }
+
+        payload = self.reissue_token(user_id).encode()
+
+        socket_client = data['client_socket']
+        socket_client.sendall()
+        print(f'succesfully sent response data: {data}')
 
     def verify_user(self, username, password):
         '''
@@ -129,6 +181,8 @@ class Authentication:
             )
             print('succesfully issuded a token')
             self.db_conn.commit()
+
+            return token
 
         except Exception as e:
             # Handle or log the exception
@@ -221,4 +275,8 @@ class Authentication:
         secret_key = bytes.fromhex(hex_key)
         return secret_key
 
+    def add(self, data):
+        self.query_queue.put(data)
 
+
+authentication = Authentication()

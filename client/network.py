@@ -37,7 +37,7 @@ class ConnectionBlock():
         print('payload sent')
 
         # Blocking, wait for servers response
-        response = self.response()
+        response = self.response(self.client)
 
     def _connect_to_server(self, server_ip, server_port):
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,13 +47,12 @@ class ConnectionBlock():
         return client
 
     def response(self):
-        # TODO: Come up with strucutre on how server sends data back
-        # etc: like payload size, type of data received etc
-        pass
+        response_header = self.client.recv(64) # Using constant of 64 bytes, must adhere to design
+        print(response_header)
 
 
 # Test
-conn = ConnectionBlock()
+conn = ConnectionBlock(ip="10.0.0.166")
 
 data = CreatePayloadData()
 
@@ -62,6 +61,6 @@ payload = {
     'password': 'ehehe'
 }
 data.create_payload(payload)
-data.create_header('AUTH/registration', '23434343344')
+data.create_header('AUTH/login', '23434343344')
 
 conn.send_payload(data)

@@ -16,9 +16,6 @@ def send_response(client_socket: socket.socket, data: object):
     client_socket.sendall(data["header"])
     client_socket.sendall(data["payload"])
 
-    # Close client
-    client_socket.close()
-
     print('Successfully sent response from server to client')
 
 
@@ -40,7 +37,7 @@ def create_header(method: str, payload: bytes):
 
     METHOD_SIZE = 20
     PAYLOAD_BYTES_SIZE = 4  # Do not use in this method, for documentation purposes only
-    TOTAL_HEADER_BYTES = 64  # Do not use in this method, for documentation purposes only
+    TOTAL_HEADER_BYTES = 24  # Do not use in this method, for documentation purposes only
 
     header_format = f'>{METHOD_SIZE}sI'
 

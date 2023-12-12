@@ -29,7 +29,7 @@ class CreatePayloadData():
 
 
 class ConnectionBlock():
-    def __init__(self, ip='10.0.0.164', port=5000):
+    def __init__(self, ip='10.0.0.166', port=5000):
         self.client = self._connect_to_server(ip, port)
 
     def send_payload(self, data: CreatePayloadData):
@@ -48,21 +48,34 @@ class ConnectionBlock():
         return client
 
     def response(self):
+        # Receiving response has two sequential parts. The first is the header, which has a size of constant 24 bytes. The one attribute of the header is the incoming payload's size, which then be used for receiving the incoming payload data
+
         # Using constant of 64 bytes, must adhere to design
-        response_header = self.client.recv(64)
-        print(response_header)
+        # Incoming header is formatted/packed using struct module. Must be unpacked to read content of header
+        temp = None
 
+        try:
+            header_format = f'>20sI'
+            response_header_packed = self.client.recv(24)
+            response_header = struct.unpack(header_format, response_header_packed)
 
-# Test
-conn = ConnectionBlock(ip="10.0.0.166")
+            method, payload_size = response_header
 
-data = CreatePayloadData()
+            response_payload = self.client.recv(payload_size)
 
-payload = {
-    'username': "colleenross",
-    'password': 'ehehe34'
-}
-data.create_payload(payload)
-data.create_header('AUTH/login', '23434343344')
+            if response_payload:
+                temp = response_payload.decode()
+                print(temp)
 
-conn.send_payload(data)
+            self.client.close()
+        
+        except:
+            return temp
+        
+        return temp
+    
+    def close(self):
+        print('attempting closing client')
+        self.client.close()
+        print('connection closed')
+

@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 pyaudio = "*"
 pynput = "*"
+python-dotenv = "*"
 
 [dev-packages]
 

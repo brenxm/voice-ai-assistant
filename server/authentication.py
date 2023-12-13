@@ -44,7 +44,7 @@ class Authentication:
         PROMPT = "PROMPT"
 
         # submethods/path
-        REGISTRATION = 'registration'
+        REGISTRATION = 'register'
         LOGIN = 'login'
         AUDIO = 'audio'
         TEXT = 'text'

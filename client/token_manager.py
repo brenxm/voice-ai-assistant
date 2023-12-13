@@ -68,5 +68,7 @@ def create_root_folder(root_folder='ai-assistant'):
 
 def create_token_file(path, token_file_name = 'token.env'):
     file_path = os.path.join(path, token_file_name)
-    os.mkdir(file_path)
+    with open(file_path, 'w') as f:
+        f.write('')
+        
     print('succesfully created a token file')

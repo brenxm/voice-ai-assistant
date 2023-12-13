@@ -38,7 +38,7 @@ class ConnectionBlock():
         print('payload sent')
 
         # Blocking, wait for servers response
-        response = self.response()
+        #response = self.response()
 
     def _connect_to_server(self, server_ip, server_port):
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,12 +48,10 @@ class ConnectionBlock():
         return client
 
     def response(self):
-        # Receiving response has two sequential parts. The first is the header, which has a size of constant 24 bytes. The one attribute of the header is the incoming payload's size, which then be used for receiving the incoming payload data
+        # Receiving response has two sequential parts. The first is the header, which has a size of constant 24 bytes. The one attribute of the header is the incoming payload's size, which then be used for receiving the second part which is receivings the payload data
 
         # Using constant of 64 bytes, must adhere to design
         # Incoming header is formatted/packed using struct module. Must be unpacked to read content of header
-        temp = None
-
         try:
             header_format = f'>20sI'
             response_header_packed = self.client.recv(24)
@@ -61,19 +59,15 @@ class ConnectionBlock():
 
             method, payload_size = response_header
 
+            print(payload_size)
             response_payload = self.client.recv(payload_size)
+            print(len(response_payload))
 
-            if response_payload:
-                temp = response_payload.decode()
-                print(temp)
-
-            self.client.close()
+            return response_payload
         
-        except:
-            return temp
-        
-        return temp
-    
+        except Exception as e:
+            print(f'Unexpected error occured: {e}')
+   
     def close(self):
         print('attempting closing client')
         self.client.close()

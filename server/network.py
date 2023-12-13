@@ -1,5 +1,6 @@
 import struct
 import socket
+from time import sleep
 
 def send_response(client_socket: socket.socket, data: object):
     '''
@@ -12,7 +13,7 @@ def send_response(client_socket: socket.socket, data: object):
     Returns:
     None
     '''
-
+    print(f'Header size must be 24, the header size is:{len(data["header"])}')
     client_socket.sendall(data["header"])
     client_socket.sendall(data["payload"])
 

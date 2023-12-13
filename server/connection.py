@@ -46,7 +46,8 @@ def start_server(ip_address, port, max_request=10):
             'client_socket': client_socket,
         }
 
-        authenticate_request(data)\
+        print(f'received request from {addr}')
+        authenticate_request(data)
 
 
 

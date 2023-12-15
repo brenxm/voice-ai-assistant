@@ -52,6 +52,10 @@ class ConnectionBlock():
 
         # Using constant of 64 bytes, must adhere to design
         # Incoming header is formatted/packed using struct module. Must be unpacked to read content of header
+        '''
+        Response received from server for every request. Must be decoded to utf-8 format and deserialized for python usage.
+        Returns: bytes
+        '''
         try:
             header_format = f'>20sI'
             response_header_packed = self.client.recv(24)

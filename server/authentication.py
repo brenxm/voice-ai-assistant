@@ -34,7 +34,7 @@ class Authentication:
             '''CREATE TABLE IF NOT EXISTS tokens (
             token_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INT,
-            token TEXT,
+            token BLOB,
             FOREIGN KEY (user_id) REFERENCES users(user_id)
             )'''
         )
@@ -156,6 +156,8 @@ class Authentication:
 
         token = jwt.encode(payload, secret_key, algorithm='HS256')
 
+        print(f'Generated token from server: {token}\nType:{type(token).__name__}')
+
         return token
 
     def reissue_token(self, user_id):
@@ -170,6 +172,8 @@ class Authentication:
         }
 
         token = jwt.encode(payload, self.secret_key, algorithm='HS256')
+        print(
+            f'Generated token from server: {token}\nType:{type(token).__name__}')
 
         try:
             self.db_cursor.execute(
@@ -178,6 +182,8 @@ class Authentication:
             )
             print('succesfully issuded a token')
             self.db_conn.commit()
+
+            self.show_tokens()
 
             return token
 

@@ -31,6 +31,17 @@ class Authentication():
         # 1. Process response from server
         # 2. Provide and update fresh token, and login
 
+        # Data received from server;s response
+        # 1. Fresh token
+        # 2. GUI navigation
+
+        # 1.
+        # decoded response from bytes to string, then string to python object
+        response = json.dumps(conn.response().decode())
+
+        token = response['token']
+        gui_path = response['gui_path']
+
     def login(self, username, password):
         conn = ConnectionBlock()
         data = CreatePayloadData()
@@ -41,15 +52,20 @@ class Authentication():
         }
 
         data.create_payload(payload)
+
         data.create_header('AUTH/login', '232323232')
 
         conn.send_payload(data)
 
         generated_token = conn.response()
+
+        write_token(generated_token)
+
         conn.close()
+
         self.token = generated_token
-        print(self.token)
-        print('Completed login')
+
+        print(type(load_token()))
 
 
 # Test
